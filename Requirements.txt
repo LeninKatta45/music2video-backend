@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+moviepy
+librosa
+numpy
+torch
+transformers
+tensorflow_hub
+tensorflow
+scipy
+pandas
+scikit-learn
