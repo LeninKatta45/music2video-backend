@@ -10,5 +10,4 @@ tensorflow
 scipy
 pandas
 scikit-learn
-streamlit
 crewai
