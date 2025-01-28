@@ -24,7 +24,6 @@ from sklearn.cluster import KMeans
 from tempfile import NamedTemporaryFile
 import logging
 import uuid
-import traceback
 import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 from functools import lru_cache
