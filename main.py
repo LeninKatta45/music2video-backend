@@ -237,7 +237,13 @@ def cluster_near_beats(significant_points):
     clustered_beats=list(kmeans.cluster_centers_.flatten())
     return clustered_beats
 
-# Step 3: Beat Sync Effects
+
+import moviepy.video.fx.all as vfx
+from moviepy.editor import VideoClip, CompositeVideoClip, ColorClip
+import numpy as np
+
+
+
 def apply_beat_sync_effects(clip, timestamps, beat_duration=0.002):
     """
     Synchronize visual effects with the provided beat timestamps.
@@ -246,26 +252,19 @@ def apply_beat_sync_effects(clip, timestamps, beat_duration=0.002):
     2. Pulse (increase brightness) on the current frame.
     """
     effects = []
+
     for ts in timestamps:
         if ts <= clip.duration:
-            # Extract the current frame at the beat timestamp
-            current_frame = clip.subclip(ts, ts + beat_duration)
+            # Apply Zoom Effect (scale from 1.0 to 1.2 over beat duration)
+            zoom_clip = clip.subclip(ts, ts + beat_duration).fx(vfx.resize, 1.2)
 
-            # Apply Zoom Effect to the current frame
-            zoom_frame = current_frame.fx(vfx.resize, 1.2)  # 1.2x zoom
-            zoom_frame = zoom_frame.set_start(ts).set_end(ts + beat_duration).fadein(0.1).fadeout(0.1)
+            # Apply Pulsing Effect (brightness increase from 1.0 to 1.5)
+            pulse_clip = clip.subclip(ts, ts + beat_duration).fx(vfx.colorx, 1.5)
 
-            # Apply Pulsing Effect (brightness increase) to the current frame
-            pulse_frame = current_frame.fx(vfx.colorx, 1.5)  # Increase brightness
-            pulse_frame = pulse_frame.set_start(ts).set_end(ts + beat_duration).fadein(0.1).fadeout(0.1)
+            effects.append(zoom_clip)
+            effects.append(pulse_clip)
 
-            # Add both effects to the list
-            effects.append(zoom_frame)
-            effects.append(pulse_frame)
-
-    # Combine all effects with the original clip
     return CompositeVideoClip([clip] + effects)
-
 
 
 # FastAPI Endpoints
@@ -442,7 +441,17 @@ async def process_video(
     print("Beat Synchronization Complete. Writing output...")
 
     # Output the final video
-    final_video.write_videofile(output_file, codec="libx264", audio_codec="aac")
+    final_video.write_videofile(
+    output_file, 
+    codec="libx264", 
+    audio_codec="aac", 
+    preset="ultrafast",  # Fastest encoding preset
+    bitrate="5000k",     # Lower bitrate speeds up rendering
+    threads=4,           # Use multi-threading for faster processing
+    fps=24,              # Set FPS to a reasonable value
+    temp_audiofile='temp-audio.m4a',  # Temporary audio file for faster muxing
+    remove_temp=True
+    )
 
     return FileResponse(output_file, media_type="video/mp4", filename="final_video.mp4")
 
