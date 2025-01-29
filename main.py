@@ -24,12 +24,15 @@ from sklearn.cluster import KMeans
 from tempfile import NamedTemporaryFile
 import logging
 import uuid
+import traceback
 import torch
 from transformers import AutoModelForSpeechSeq2Seq, AutoProcessor
 from functools import lru_cache
 import librosa
 from Emotion import Extract_emotion
-
+import requests
+import json
+import re
 # Configure logging
 logging.basicConfig(level=logging.ERROR)
 
@@ -281,25 +284,35 @@ async def generate_prompt(
     try:
         # Handle URL download or file upload
         if url:
-             try:
-                response = requests.get(url, stream=True)
-                response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
+            headers = {"User-Agent": "Mozilla/5.0"}
+            response = requests.get(url, headers=headers)
 
-                # Generate a unique filename for the temporary audio file
-                unique_filename = str(uuid.uuid4()) + ".mp3"
-                audio_path = os.path.join("temp_audio", unique_filename)
+            # Extract the .mp3 link using regex
+            match = re.search(r'"audio_file":"(https://[\w./%-]+\.mp3)"', response.text)
 
-                with open(audio_path, "wb") as audio_temp:
-                    for chunk in response.iter_content(chunk_size=1024):
-                        audio_temp.write(chunk)
-             except requests.exceptions.RequestException as e:
-                logging.error(f"Failed to download audio from URL: {url}. Error: {e}")
-                raise HTTPException(status_code=400, detail=f"Failed to download audio from URL: {url}. Error: {e}")
+            if match:
+                mp3_url = match.group(1)
+                print("MP3 URL:", mp3_url)
+
+                # Download the MP3 file
+                mp3_response = requests.get(mp3_url, headers=headers)
+                
+                audio_temp = NamedTemporaryFile(delete=False, suffix=".mp3", dir="temp_audio")
+                audio_temp.write(mp3_response.content)
+                audio_temp.close()
+                
+                audio_path = audio_temp.name
+                print(f"Downloaded: {audio_path}")
+            else:
+                print("MP3 URL not found!")
         elif audio_file:
             audio_temp = NamedTemporaryFile(delete=False, suffix=os.path.splitext(audio_file.filename)[1], dir="temp_audio")
             audio_temp.write(await audio_file.read())
             audio_temp.close()
             audio_path = audio_temp.name
+            print("Audio: ",type(audio_temp))
+            print("Audio_path_type: ",type(audio_path))
+            print("Audio_path: ",audio_path)
         else:
             raise HTTPException(status_code=400, detail="No audio file or URL provided.")
          
@@ -371,7 +384,7 @@ async def generate_prompt(
 @app.post("/process_video/")
 async def process_video(
     video_file: UploadFile = File(...),
-    audio_file: UploadFile = File(...),
+    audio_path: str = Form(...), # Change audio file to audio_path and make it string
     tempo: float = Form(...),
     sr: int = Form(...),
     significant_points_str: str = Form(...)
@@ -379,14 +392,16 @@ async def process_video(
     output_file = None
     video_clip = None
     audio_clip = None
-    audio_path = audio_file.filename
+    #audio_path = audio_file.filename
     video_path = video_file.filename
+
+    print("Audio Path: ",audio_path)
+    print("Completed..........")
   
     # Save uploaded files
     with open(video_path, "wb") as f:
         f.write(await video_file.read())  # Use 'await' for async reading
-    with open(audio_path, "wb") as f:
-        f.write(await audio_file.read())  # Use 'await' for async reading
+
 
     print("File Has Been Written...")
     video_clip = VideoFileClip(video_path).without_audio()
